@@ -1,12 +1,14 @@
-import { Users } from './services/users';
-import { Logger } from './services/logger';
+import { createIoCContainer } from './ioc';
+import type { Users } from './services/users';
+import type { ApiConfig, User } from './types';
 
-import type { User, ApiConfig } from './types';
+declare global {
+  interface Window {
+    __CONFIG__?: { api: ApiConfig };
+  }
+}
 
-const renderUsers = async (config: ApiConfig) => {
-  const usersService = new Users(config);
-  const users = await usersService.getUsers();
-
+const renderUsers = async (users: User[]) => {
   const listNode = document.getElementById('users-list');
 
   users.forEach((user: User) => {
@@ -18,16 +20,19 @@ const renderUsers = async (config: ApiConfig) => {
 };
 
 const app = () => {
-  const config = (window as any).__CONFIG__;
-  delete (window as any).__CONFIG__;
+  const clientConfig = window.__CONFIG__;
+  delete window.__CONFIG__;
 
-  renderUsers(config.api);
-};
+  if (!clientConfig) {
+    throw new Error('Client configuration is missing.');
+  }
 
-window.onload = (event: Event) => {
-  const logger = new Logger();
+  const ioc = createIoCContainer(clientConfig.api);
+  const logger = ioc.resolve('logger');
+  const usersService: Users = ioc.resolve('users');
 
   logger.info('Page is loaded.');
-
-  app();
+  usersService.getUsers().then(renderUsers);
 };
+
+window.onload = app;
